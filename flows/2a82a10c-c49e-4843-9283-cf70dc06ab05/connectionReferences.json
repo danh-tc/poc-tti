@@ -1,0 +1,13 @@
+{
+  "shared_onedriveforbusiness": {
+    "connectionName": "shared-onedriveforbu-89f73d8c-a36c-4a0c-8c3a-b7c98382e76a",
+    "source": "Embedded",
+    "id": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
+    "displayName": "OneDrive for Business",
+    "iconUri": "https://static.powerapps.com/resource/ppcr/releases/v1.0.1827/1.0.1827.4902/onedriveforbusiness/icon.png",
+    "brandColor": "#0078D4",
+    "tier": "Standard",
+    "apiName": "onedriveforbusiness",
+    "isProcessSimpleApiReferenceConversionAlreadyDone": false
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$authentication": {
+      "defaultValue": {},
+      "type": "SecureObject"
+    },
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    }
+  },
+  "triggers": {
+    "When_a_file_is_created": {
+      "recurrence": {
+        "frequency": "Minute",
+        "interval": 1
+      },
+      "evaluatedRecurrence": {
+        "frequency": "Minute",
+        "interval": 1
+      },
+      "metadata": {
+        "6e202211-2856-4d17-9ded-5beb8b8626b0": "/",
+        "b!gqRZbP1my0ap2DEc75EDu_PvjbEE-8xPtrZgAcRgeJdRUvC7Eh8qQJeCTFFEsA_k.012UTSQF4R2KIW5GQMQRDINY47KI5JKGOZ": "/Source",
+        "b!gqRZbP1my0ap2DEc75EDu_PvjbEE-8xPtrZgAcRgeJdRUvC7Eh8qQJeCTFFEsA_k.012UTSQFZGS56GT7T5EVHKWRY6EPME3FYQ": "/POC/Folder-A-Input"
+      },
+      "type": "OpenApiConnection",
+      "inputs": {
+        "parameters": {
+          "folderId": "b!gqRZbP1my0ap2DEc75EDu_PvjbEE-8xPtrZgAcRgeJdRUvC7Eh8qQJeCTFFEsA_k.012UTSQFZGS56GT7T5EVHKWRY6EPME3FYQ",
+          "includeSubfolders": true,
+          "inferContentType": true
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
+          "connectionName": "shared_onedriveforbusiness",
+          "operationId": "OnNewFileV2"
+        },
+        "authentication": "@parameters('$authentication')"
+      }
+    }
+  },
+  "actions": {
+    "Copy_file": {
+      "runAfter": {},
+      "type": "OpenApiConnection",
+      "inputs": {
+        "parameters": {
+          "id": "@triggerOutputs()?['headers']?['x-ms-file-id']",
+          "destination": "/POC/Folder-B-Master/@{triggerOutputs()?['headers']?['x-ms-file-name']}",
+          "overwrite": false
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
+          "connectionName": "shared_onedriveforbusiness",
+          "operationId": "CopyDriveFile"
+        },
+        "authentication": "@parameters('$authentication')"
+      }
+    }
+  },
+  "outputs": {},
+  "description": ""
+}

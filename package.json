@@ -1,0 +1,12 @@
+{
+  "name": "poc-tti",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "flow:envs": "node scripts/flow.mjs envs",
+    "flow:list": "node scripts/flow.mjs list",
+    "flow:pull": "node scripts/flow.mjs pull",
+    "flow:push": "node scripts/flow.mjs push",
+    "flow:runs": "node scripts/flow.mjs runs"
+  }
+}
