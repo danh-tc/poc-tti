@@ -7,6 +7,8 @@
 //   node scripts/flow.mjs runs [flowId]        show last 10 runs + errors of failed actions
 //
 // Config comes from .env (ENV_ID, FLOW_ID, optional TENANT_ID).
+// Secrets: definition.json in the repo holds placeholders like {{COMPARE_FN_KEY}};
+// push fills them from .env, pull turns the real values back into placeholders.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { getToken } from './auth.mjs';
 
@@ -40,6 +42,26 @@ const flowDir = (id) => new URL(`../flows/${id}/`, import.meta.url);
 const writeJson = (url, data) => writeFile(url, JSON.stringify(data, null, 2) + '\n');
 const readJson = async (url) => JSON.parse(await readFile(url, 'utf8'));
 
+const SECRETS = ['COMPARE_FN_KEY'];
+
+function fillSecrets(definition) {
+  let json = JSON.stringify(definition);
+  for (const name of SECRETS) {
+    if (!json.includes(`{{${name}}}`)) continue;
+    if (!process.env[name]) throw new Error(`${name} is not set in .env (needed by definition.json)`);
+    json = json.replaceAll(`{{${name}}}`, process.env[name]);
+  }
+  return JSON.parse(json);
+}
+
+function maskSecrets(definition) {
+  let json = JSON.stringify(definition);
+  for (const name of SECRETS) {
+    if (process.env[name]) json = json.replaceAll(process.env[name], `{{${name}}}`);
+  }
+  return JSON.parse(json);
+}
+
 const commands = {
   async envs() {
     const { value } = await api('GET', '/environments');
@@ -58,7 +80,7 @@ const commands = {
     const { displayName, state, definition, connectionReferences } = flow.properties;
     const dir = flowDir(id);
     await mkdir(dir, { recursive: true });
-    await writeJson(new URL('definition.json', dir), definition);
+    await writeJson(new URL('definition.json', dir), maskSecrets(definition));
     await writeJson(new URL('connectionReferences.json', dir), connectionReferences ?? {});
     await writeJson(new URL('meta.json', dir), { id, envId: ENV_ID, displayName, state });
     console.log(`Pulled "${displayName}" (${state}) -> flows/${id}/`);
@@ -88,7 +110,7 @@ const commands = {
   async push(id) {
     requireEnv();
     const dir = flowDir(id);
-    const definition = await readJson(new URL('definition.json', dir));
+    const definition = fillSecrets(await readJson(new URL('definition.json', dir)));
     const connectionReferences = await readJson(new URL('connectionReferences.json', dir));
     const { displayName } = await readJson(new URL('meta.json', dir));
 

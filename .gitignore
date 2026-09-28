@@ -1,3 +1,8 @@
 .env
 .token-cache.json
 node_modules/
+
+compare-fn/local.settings.json
+compare-fn/out/
+compare-fn/.deploy/
+compare-fn/deploy.zip

@@ -1,0 +1,6 @@
+.vscode
+local.settings.json
+local.settings.example.json
+scripts
+samples
+out

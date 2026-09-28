@@ -39,26 +39,198 @@
           "operationId": "OnNewFileV2"
         },
         "authentication": "@parameters('$authentication')"
-      }
+      },
+      "conditions": [
+        {
+          "expression": "@endsWith(toLower(coalesce(triggerOutputs()?['headers']?['x-ms-file-name'], '')), '.pdf')"
+        }
+      ]
     }
   },
   "actions": {
-    "Copy_file": {
+    "Input_name": {
+      "runAfter": {},
+      "type": "Compose",
+      "inputs": "@triggerOutputs()?['headers']?['x-ms-file-name']"
+    },
+    "Input_base_name": {
+      "runAfter": {
+        "Input_name": [
+          "Succeeded"
+        ]
+      },
+      "type": "Compose",
+      "inputs": "@substring(outputs('Input_name'), 0, lastIndexOf(outputs('Input_name'), '.'))",
+      "description": "File name without extension, used to find the master file"
+    },
+    "Get_master_folder": {
       "runAfter": {},
       "type": "OpenApiConnection",
       "inputs": {
         "parameters": {
-          "id": "@triggerOutputs()?['headers']?['x-ms-file-id']",
-          "destination": "/POC/Folder-B-Master/@{triggerOutputs()?['headers']?['x-ms-file-name']}",
-          "overwrite": false
+          "path": "/POC/Folder-B-Master"
         },
         "host": {
           "apiId": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
           "connectionName": "shared_onedriveforbusiness",
-          "operationId": "CopyDriveFile"
+          "operationId": "GetFileMetadataByPath"
         },
         "authentication": "@parameters('$authentication')"
       }
+    },
+    "List_master_files": {
+      "runAfter": {
+        "Get_master_folder": [
+          "Succeeded"
+        ]
+      },
+      "type": "OpenApiConnection",
+      "inputs": {
+        "parameters": {
+          "id": "@body('Get_master_folder')?['Id']"
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
+          "connectionName": "shared_onedriveforbusiness",
+          "operationId": "ListFolderV2"
+        },
+        "authentication": "@parameters('$authentication')"
+      }
+    },
+    "Find_master": {
+      "runAfter": {
+        "List_master_files": [
+          "Succeeded"
+        ],
+        "Input_base_name": [
+          "Succeeded"
+        ]
+      },
+      "type": "Query",
+      "inputs": {
+        "from": "@body('List_master_files')?['value']",
+        "where": "@and(equals(item()?['IsFolder'], false), endsWith(toLower(item()?['Name']), '.pdf'), contains(toLower(item()?['Name']), toLower(outputs('Input_base_name'))))"
+      },
+      "description": "Master PDFs whose name contains the input base name (case-insensitive)"
+    },
+    "Has_master": {
+      "actions": {
+        "Get_input_content": {
+          "runAfter": {},
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "id": "@triggerOutputs()?['headers']?['x-ms-file-id']",
+              "inferContentType": false
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
+              "connectionName": "shared_onedriveforbusiness",
+              "operationId": "GetFileContent"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Get_master_content": {
+          "runAfter": {},
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "id": "@first(body('Find_master'))?['Id']",
+              "inferContentType": false
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
+              "connectionName": "shared_onedriveforbusiness",
+              "operationId": "GetFileContent"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Compare_PDFs": {
+          "runAfter": {
+            "Get_input_content": [
+              "Succeeded"
+            ],
+            "Get_master_content": [
+              "Succeeded"
+            ]
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "POST",
+            "uri": "https://func-poc-tti-tldz7u.azurewebsites.net/api/compare",
+            "headers": {
+              "Content-Type": "application/json",
+              "x-functions-key": "{{COMPARE_FN_KEY}}"
+            },
+            "body": {
+              "inputName": "@outputs('Input_name')",
+              "inputContent": "@base64(body('Get_input_content'))",
+              "masterName": "@first(body('Find_master'))?['Name']",
+              "masterContent": "@base64(body('Get_master_content'))"
+            }
+          }
+        },
+        "Create_report": {
+          "runAfter": {
+            "Compare_PDFs": [
+              "Succeeded"
+            ]
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "parameters": {
+              "folderPath": "/POC/Folder-C-Result",
+              "name": "@{outputs('Input_base_name')}_report_@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}.pdf",
+              "body": "@base64ToBinary(body('Compare_PDFs')?['reportContent'])"
+            },
+            "host": {
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
+              "connectionName": "shared_onedriveforbusiness",
+              "operationId": "CreateFile"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        }
+      },
+      "runAfter": {
+        "Find_master": [
+          "Succeeded"
+        ]
+      },
+      "else": {
+        "actions": {
+          "Create_missing_master_note": {
+            "runAfter": {},
+            "type": "OpenApiConnection",
+            "inputs": {
+              "parameters": {
+                "folderPath": "/POC/Folder-C-Result",
+                "name": "@{outputs('Input_base_name')}_MISSING_MASTER_@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}.txt",
+                "body": "No master PDF in /POC/Folder-B-Master whose name contains \"@{outputs('Input_base_name')}\" (input: @{outputs('Input_name')})."
+              },
+              "host": {
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_onedriveforbusiness",
+                "connectionName": "shared_onedriveforbusiness",
+                "operationId": "CreateFile"
+              },
+              "authentication": "@parameters('$authentication')"
+            }
+          }
+        }
+      },
+      "expression": {
+        "and": [
+          {
+            "greater": [
+              "@length(body('Find_master'))",
+              0
+            ]
+          }
+        ]
+      },
+      "type": "If"
     }
   },
   "outputs": {},
